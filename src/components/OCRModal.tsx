@@ -12,8 +12,10 @@ import {
   ArrowRight,
   Eye,
   RefreshCw,
-  AlertCircle
+  AlertCircle,
+  Cpu
 } from 'lucide-react';
+import { getCustomApiKey } from '@/services/storage';
 
 interface OCRModalProps {
   isOpen: boolean;
@@ -26,6 +28,7 @@ export default function OCRModal({ isOpen, onClose, onConfirmText }: OCRModalPro
   const [isProcessing, setIsProcessing] = useState(false);
   const [recognizedText, setRecognizedText] = useState('');
   const [confidence, setConfidence] = useState<number | null>(null);
+  const [modelUsed, setModelUsed] = useState<string>('Gemini 1.5 Pro Vision');
   const [ocrStep, setOcrStep] = useState<'upload' | 'scanning' | 'review'>('upload');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -60,12 +63,14 @@ export default function OCRModal({ isOpen, onClose, onConfirmText }: OCRModalPro
     setOcrStep('scanning');
 
     try {
+      const customKey = getCustomApiKey();
       const response = await fetch('/api/ocr', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           imageBase64: isSample ? null : imageSrc,
           isSample: isSample,
+          apiKey: customKey || undefined,
         }),
       });
 
@@ -75,7 +80,8 @@ export default function OCRModal({ isOpen, onClose, onConfirmText }: OCRModalPro
       setTimeout(() => {
         setIsProcessing(false);
         setRecognizedText(data.text || '');
-        setConfidence(data.confidence || 0.95);
+        setConfidence(data.confidence || 0.98);
+        setModelUsed(data.model_used || 'Gemini 1.5 Pro Vision');
         setOcrStep('review');
       }, 1400);
     } catch (err) {
@@ -199,16 +205,19 @@ export default function OCRModal({ isOpen, onClose, onConfirmText }: OCRModalPro
           {/* STEP 3: Side-by-side Review & Edit */}
           {ocrStep === 'review' && (
             <div className="space-y-4">
-              <div className="flex items-center justify-between bg-blue-50/70 border border-blue-100 p-3 rounded-2xl text-xs text-blue-900">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-blue-50/70 border border-blue-100 p-3.5 rounded-2xl text-xs text-blue-900">
                 <div className="flex items-center gap-2">
                   <Sparkles className="w-4 h-4 text-blue-600 shrink-0" />
                   <span>
-                    Texto reconhecido com <strong>{Math.round((confidence || 0.95) * 100)}% de precisão estimada</strong>. Revise e faça pequenos ajustes antes de enviar para a correção.
+                    Texto reconhecido com <strong>{Math.round((confidence || 0.98) * 100)}% de precisão estimada</strong>.
+                  </span>
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-blue-600 text-white font-mono text-[10px] font-bold">
+                    <Cpu className="w-3 h-3" /> {modelUsed}
                   </span>
                 </div>
                 <button
                   onClick={handleReset}
-                  className="flex items-center gap-1 text-slate-600 hover:text-slate-900 font-semibold shrink-0"
+                  className="flex items-center gap-1 text-slate-600 hover:text-slate-900 font-semibold shrink-0 text-xs"
                 >
                   <RefreshCw className="w-3.5 h-3.5" /> Trocar foto
                 </button>
