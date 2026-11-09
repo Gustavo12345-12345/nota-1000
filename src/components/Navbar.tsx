@@ -276,7 +276,7 @@ export default function Navbar() {
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2 text-slate-900 font-bold text-lg">
                 <Key className="w-5 h-5 text-blue-600" />
-                Chave da API Gemini (Opcional)
+                Chave de IA (ChatGPT ou Gemini)
               </div>
               <button
                 onClick={() => setApiKeyModalOpen(false)}
@@ -286,11 +286,11 @@ export default function Navbar() {
               </button>
             </div>
             <p className="text-xs text-slate-600 mb-4 leading-relaxed">
-              O <strong>Nota 1000</strong> já conta com um motor avaliador pedagógico completo e pronto para uso sem nenhuma chave. Se desejar usar sua própria chave da Google Gemini API para chamadas diretas com IA gerativa, insira-a abaixo:
+              Insira sua chave da <strong>OpenAI / ChatGPT</strong> (começa com <code>sk-...</code>) ou do <strong>Google Gemini</strong> para habilitar OCR de fotos reais e correções com IA avançada:
             </p>
             <input
               type="password"
-              placeholder="AIzaSy..."
+              placeholder="sk-... ou AIzaSy..."
               value={apiKeyInput}
               onChange={(e) => setApiKeyInput(e.target.value)}
               className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500 font-mono mb-4"

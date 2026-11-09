@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import OpenAI from 'openai';
 
 export async function POST(req: NextRequest) {
   try {
@@ -25,136 +26,167 @@ Portanto medidas precisam ser tomadas pelo governo. O Ministério da Educação 
       return NextResponse.json({ error: 'Nenhuma imagem foi enviada para o OCR.' }, { status: 400 });
     }
 
-    const apiKey = (userProvidedKey && String(userProvidedKey).trim()) ||
-                   process.env.GEMINI_API_KEY ||
-                   process.env.GOOGLE_API_KEY;
+    // Detectar provedor pela chave (OpenAI começa com "sk-")
+    const providedKey = (userProvidedKey && String(userProvidedKey).trim()) || '';
+    const openAiKey = (providedKey.startsWith('sk-') ? providedKey : null) ||
+                      process.env.OPENAI_API_KEY;
 
-    if (!apiKey) {
+    const geminiKey = (!providedKey.startsWith('sk-') && providedKey ? providedKey : null) ||
+                      process.env.GEMINI_API_KEY ||
+                      process.env.GOOGLE_API_KEY;
+
+    if (!openAiKey && !geminiKey) {
       return NextResponse.json({
-        error: 'Chave da Google Gemini API não configurada. Configure a variável GEMINI_API_KEY no painel da Vercel ou clique no ícone de chave (🔑) no topo do site para inserir uma chave válida do Google AI Studio.',
+        error: 'Chave de IA não configurada. Você pode usar uma chave do ChatGPT/OpenAI (começa com "sk-") ou do Google Gemini. Insira no campo abaixo ou configure na Vercel.',
         needKey: true
       }, { status: 401 });
     }
 
-    // Identificar formato da imagem (JPEG, PNG, WEBP, etc.)
+    // Formato da imagem (JPEG, PNG, WEBP)
     const mimeMatch = imageBase64.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,/);
     const mimeType = mimeMatch ? mimeMatch[1] : 'image/jpeg';
     const cleanBase64 = imageBase64.replace(/^data:image\/[a-zA-Z0-9.+-]+;base64,/, '');
 
-    const ocrInstruction = `Você é um especialista em OCR e transcrição paleográfica de redações manuscritas do ENEM em língua portuguesa do Brasil.
-Sua tarefa é transcrever com fidelidade absoluta todo o texto redigido pelo estudante nesta folha de redação.
+    const ocrInstruction = `Você é um especialista em transcrição paleográfica de redações manuscritas do ENEM em língua portuguesa do Brasil.
+Transcreva com fidelidade absoluta todo o texto escrito pelo candidato nesta folha de redação.
 
-DIRETRIZES FUNDAMENTAIS:
-1. Transcreva EXATAMENTE as palavras manuscritas na imagem, preservando pontuação, acentuação e vocabulário utilizado pelo estudante.
-2. Ignore os números das linhas impressos na margem esquerda (1, 2, 3... 30) e eventuais cabeçalhos impressos da folha oficial.
-3. Preserve a estrutura em parágrafos: separe os parágrafos com quebra de linha dupla (Enter Enter).
-4. Se uma palavra estiver dividida no fim de uma linha com hífen de translineação (ex: "so- / ciedade"), una a palavra normalmente ("sociedade").
-5. NÃO invente texto. NÃO adicione comentários, correções nem explicações. Retorne EXCLUSIVAMENTE o texto manuscrito transcrito da imagem.`;
+DIRETRIZES:
+1. Transcreva EXATAMENTE as palavras escritas, preservando pontuação e vocabulário do aluno.
+2. Ignore os números das linhas da margem esquerda (1, 2, 3... 30) e os títulos impressos da folha do ENEM.
+3. Preserve os parágrafos separando-os com quebra de linha dupla (Enter Enter).
+4. Junte palavras separadas por hífen no fim da linha (translineação).
+5. Retorne EXCLUSIVAMENTE o texto manuscrito transcrito, sem introduções nem observações.`;
 
-    // 1ª Tentativa: Gemini 1.5 Pro
-    let lastErrorDetails = '';
-    try {
-      const responsePro = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${apiKey}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [
-            {
-              parts: [
-                { text: ocrInstruction },
-                {
-                  inlineData: {
-                    mimeType: mimeType,
-                    data: cleanBase64,
-                  }
-                }
-              ]
-            }
-          ],
-          generationConfig: {
-            temperature: 0.05,
-          }
-        }),
-      });
-
-      if (responsePro.ok) {
-        const dataPro = await responsePro.json();
-        const recognizedText = dataPro.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (recognizedText && recognizedText.trim().length > 10) {
-          return NextResponse.json({
-            text: recognizedText.trim(),
-            confidence: 0.98,
-            model_used: 'Gemini 1.5 Pro Vision',
-            source: 'gemini_vision_pro'
-          });
-        }
-      } else {
-        const errJson = await responsePro.json().catch(() => ({}));
-        lastErrorDetails = errJson.error?.message || `Status HTTP ${responsePro.status}`;
-        console.warn('Gemini Pro OCR error:', lastErrorDetails);
-      }
-    } catch (proError: any) {
-      lastErrorDetails = proError.message || String(proError);
-      console.warn('Tentativa com Gemini 1.5 Pro falhou:', lastErrorDetails);
-    }
-
-    // 2ª Tentativa: Gemini 1.5 Flash
-    try {
-      const responseFlash = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [
-            {
-              parts: [
-                { text: ocrInstruction },
-                {
-                  inlineData: {
-                    mimeType: mimeType,
-                    data: cleanBase64,
-                  }
-                }
-              ]
-            }
-          ],
-          generationConfig: {
+    // 1. OPENAI (CHATGPT - GPT-4o / GPT-4o-mini Vision)
+    if (openAiKey) {
+      try {
+        const openai = new OpenAI({ apiKey: openAiKey });
+        // Tentamos gpt-4o (máxima precisão em caligrafia) com fallback para gpt-4o-mini
+        let completion;
+        try {
+          completion = await openai.chat.completions.create({
+            model: 'gpt-4o',
+            messages: [
+              {
+                role: 'user',
+                content: [
+                  { type: 'text', text: ocrInstruction },
+                  {
+                    type: 'image_url',
+                    image_url: {
+                      url: `data:${mimeType};base64,${cleanBase64}`,
+                      detail: 'high',
+                    },
+                  },
+                ],
+              },
+            ],
             temperature: 0.1,
-          }
-        }),
-      });
-
-      if (responseFlash.ok) {
-        const dataFlash = await responseFlash.json();
-        const textFlash = dataFlash.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (textFlash && textFlash.trim().length > 10) {
-          return NextResponse.json({
-            text: textFlash.trim(),
-            confidence: 0.95,
-            model_used: 'Gemini 1.5 Flash Vision',
-            source: 'gemini_vision_flash'
+            max_tokens: 1800,
+          });
+        } catch {
+          completion = await openai.chat.completions.create({
+            model: 'gpt-4o-mini',
+            messages: [
+              {
+                role: 'user',
+                content: [
+                  { type: 'text', text: ocrInstruction },
+                  {
+                    type: 'image_url',
+                    image_url: {
+                      url: `data:${mimeType};base64,${cleanBase64}`,
+                      detail: 'high',
+                    },
+                  },
+                ],
+              },
+            ],
+            temperature: 0.1,
+            max_tokens: 1800,
           });
         }
-      } else {
-        const errJson = await responseFlash.json().catch(() => ({}));
-        lastErrorDetails = errJson.error?.message || `Status HTTP ${responseFlash.status}`;
-        console.warn('Gemini Flash OCR error:', lastErrorDetails);
+
+        const recognizedText = completion.choices[0]?.message?.content?.trim();
+        if (recognizedText && recognizedText.length > 10) {
+          return NextResponse.json({
+            text: recognizedText,
+            confidence: 0.99,
+            model_used: 'ChatGPT (OpenAI GPT-4o Vision)',
+            source: 'openai_vision'
+          });
+        }
+      } catch (openAiErr: any) {
+        console.error('Erro na OpenAI:', openAiErr);
+        return NextResponse.json({
+          error: `Erro na OpenAI (ChatGPT): ${openAiErr.message || 'Verifique o saldo e permissões da sua chave OpenAI'}.`,
+          needKey: true,
+          provider: 'openai'
+        }, { status: 400 });
       }
-    } catch (flashError: any) {
-      lastErrorDetails = flashError.message || String(flashError);
-      console.warn('Fallback Gemini Flash falhou:', lastErrorDetails);
     }
 
-    // Se chegou até aqui com erro na API da Google, retornar o erro real para o usuário
+    // 2. GOOGLE GEMINI (Caso use chave Gemini)
+    if (geminiKey) {
+      try {
+        const responsePro = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${geminiKey}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [
+              {
+                parts: [
+                  { text: ocrInstruction },
+                  {
+                    inlineData: {
+                      mimeType: mimeType,
+                      data: cleanBase64,
+                    }
+                  }
+                ]
+              }
+            ],
+            generationConfig: { temperature: 0.05 }
+          }),
+        });
+
+        if (responsePro.ok) {
+          const dataPro = await responsePro.json();
+          const recognizedText = dataPro.candidates?.[0]?.content?.parts?.[0]?.text;
+          if (recognizedText && recognizedText.trim().length > 10) {
+            return NextResponse.json({
+              text: recognizedText.trim(),
+              confidence: 0.98,
+              model_used: 'Gemini 1.5 Pro Vision',
+              source: 'gemini_vision_pro'
+            });
+          }
+        } else {
+          const errJson = await responsePro.json().catch(() => ({}));
+          const errMsg = errJson.error?.message || `Status ${responsePro.status}`;
+          return NextResponse.json({
+            error: `Erro no Gemini: ${errMsg}. Dica: Você também pode usar uma chave da OpenAI (ChatGPT) começando com "sk-".`,
+            needKey: true,
+            provider: 'gemini'
+          }, { status: 400 });
+        }
+      } catch (geminiErr: any) {
+        return NextResponse.json({
+          error: `Falha ao conectar no Gemini: ${geminiErr.message}.`,
+          needKey: true
+        }, { status: 400 });
+      }
+    }
+
     return NextResponse.json({
-      error: `Erro ao comunicar com a Google Gemini API: ${lastErrorDetails}. Verifique se a sua chave no Google AI Studio está ativa e possui cota.`,
-      details: lastErrorDetails,
+      error: 'Não foi possível processar o OCR. Insira uma chave válida da OpenAI (ChatGPT) ou Gemini.',
       needKey: true
     }, { status: 400 });
 
   } catch (error: any) {
-    console.error('Erro na rota de OCR:', error);
+    console.error('Erro geral na rota de OCR:', error);
     return NextResponse.json({
-      error: `Falha ao processar OCR da imagem: ${error.message || 'Erro interno'}`
+      error: `Erro ao processar imagem: ${error.message || 'Erro inesperado'}`
     }, { status: 500 });
   }
 }

@@ -177,7 +177,7 @@ export default function OCRModal({ isOpen, onClose, onConfirmText }: OCRModalPro
                     <Key className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
                     <input
                       type="password"
-                      placeholder="Cole aqui sua chave do Google AI Studio (AIzaSy...)"
+                      placeholder="Cole aqui sua chave da OpenAI (sk-...) ou Gemini"
                       value={inlineKey}
                       onChange={(e) => setInlineKey(e.target.value)}
                       className="w-full pl-9 pr-3 py-2 bg-white rounded-xl border border-rose-300 text-xs text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-blue-500 font-mono"

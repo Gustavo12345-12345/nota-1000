@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { evaluateEssayPedagogical } from '@/lib/evaluator';
 import { CorrectionResult } from '@/types/essay';
+import OpenAI from 'openai';
 
 export async function POST(req: NextRequest) {
   try {
@@ -14,12 +15,15 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const apiKey = userProvidedKey || process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+    const providedKey = (userProvidedKey && String(userProvidedKey).trim()) || '';
+    const openAiKey = (providedKey.startsWith('sk-') ? providedKey : null) ||
+                      process.env.OPENAI_API_KEY;
 
-    // Se houver API key configurada, podemos chamar o Gemini API com formato JSON estruturado
-    if (apiKey) {
-      try {
-        const prompt = `Você é um corretor oficial sênior da banca do ENEM (Exame Nacional do Ensino Médio - INEP).
+    const geminiKey = (!providedKey.startsWith('sk-') && providedKey ? providedKey : null) ||
+                      process.env.GEMINI_API_KEY ||
+                      process.env.GOOGLE_API_KEY;
+
+    const gradingPrompt = `Você é um corretor oficial sênior da banca do ENEM (Exame Nacional do Ensino Médio - INEP).
 Avalie a seguinte redação com base nas 5 competências oficiais do ENEM (C1, C2, C3, C4, C5), com pontuações estritamente múltiplas de 40 (0, 40, 80, 120, 160, 200).
 
 TEMA DA REDAÇÃO: "${tema || 'Tema Livre do ENEM'}"
@@ -30,7 +34,7 @@ TEXTO DA REDAÇÃO:
 ${text}
 """
 
-Responda ESTRITAMENTE em formato JSON compatível com a interface abaixo, sem marcação markdown adicional fora do bloco json:
+Responda ESTRITAMENTE em formato JSON com esta estrutura exata:
 {
   "nota_total": number,
   "distancia_1000": number,
@@ -65,7 +69,7 @@ Responda ESTRITAMENTE em formato JSON compatível com a interface abaixo, sem ma
     {
       "id": string,
       "tipo": "gramatica" | "argumentacao" | "coesao" | "positivo",
-      "trecho": string (substring exata contida no texto),
+      "trecho": string,
       "problema": string,
       "sugestao": string,
       "competencia": string
@@ -73,14 +77,53 @@ Responda ESTRITAMENTE em formato JSON compatível com a interface abaixo, sem ma
   ]
 }`;
 
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+    // 1. TENTATIVA COM OPENAI (CHATGPT)
+    if (openAiKey) {
+      try {
+        const openai = new OpenAI({ apiKey: openAiKey });
+        const completion = await openai.chat.completions.create({
+          model: 'gpt-4o-mini',
+          response_format: { type: 'json_object' },
+          messages: [
+            { role: 'system', content: 'Você é um avaliador do ENEM sênior e responde exclusivamente em JSON formatado.' },
+            { role: 'user', content: gradingPrompt }
+          ],
+          temperature: 0.2,
+        });
+
+        const responseText = completion.choices[0]?.message?.content;
+        if (responseText) {
+          const parsed = JSON.parse(responseText);
+          const baseResult = evaluateEssayPedagogical(text, tema, titulo);
+          const mergedResult: CorrectionResult = {
+            ...baseResult,
+            ...parsed,
+            id: 'corr-chatgpt-' + Date.now(),
+            tema: tema || 'Tema do ENEM',
+            titulo,
+            texto_original: text,
+            data: new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' }),
+            estatisticas: baseResult.estatisticas,
+            distancia_1000: 1000 - (parsed.nota_total || baseResult.nota_total),
+          };
+          return NextResponse.json(mergedResult);
+        }
+      } catch (openAiErr) {
+        console.warn('OpenAI grading failed, trying fallback:', openAiErr);
+      }
+    }
+
+    // 2. TENTATIVA COM GEMINI
+    if (geminiKey) {
+      try {
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }],
+            contents: [{ parts: [{ text: gradingPrompt }] }],
             generationConfig: {
               temperature: 0.2,
-              responseMimeType: "application/json",
+              responseMimeType: 'application/json',
             }
           }),
         });
@@ -90,7 +133,6 @@ Responda ESTRITAMENTE em formato JSON compatível com a interface abaixo, sem ma
           const responseText = data.candidates?.[0]?.content?.parts?.[0]?.text;
           if (responseText) {
             const parsed = JSON.parse(responseText);
-            // Preencher metadados complementares
             const baseResult = evaluateEssayPedagogical(text, tema, titulo);
             const mergedResult: CorrectionResult = {
               ...baseResult,
@@ -111,7 +153,7 @@ Responda ESTRITAMENTE em formato JSON compatível com a interface abaixo, sem ma
       }
     }
 
-    // Fallback garantido e robusto para o avaliador pedagógico INEP
+    // 3. Fallback garantido para o motor pedagógico local
     const result = evaluateEssayPedagogical(text, tema || 'Tema do ENEM', titulo);
     return NextResponse.json(result);
   } catch (error: unknown) {
