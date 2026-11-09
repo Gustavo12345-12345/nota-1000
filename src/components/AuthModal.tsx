@@ -2,8 +2,8 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { X, Mail, Lock, User, ArrowRight, CheckCircle2, Sparkles } from 'lucide-react';
-import { saveUser, UserProfile } from '@/services/storage';
+import { X, Mail, Lock, User, ArrowRight, CheckCircle2 } from 'lucide-react';
+import { saveUser, UserProfile, findRegisteredUserByEmail } from '@/services/storage';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -38,29 +38,60 @@ export default function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps
         return;
       }
 
+      const cleanEmail = email.trim().toLowerCase();
+      const existingUser = findRegisteredUserByEmail(cleanEmail);
+
+      // Nome prioritário: o que o usuário digitou no campo 'name', ou o registrado na conta, ou extraído do e-mail
+      let displayName = name.trim();
+      if (!displayName && existingUser?.nome) {
+        displayName = existingUser.nome;
+      }
+      if (!displayName) {
+        const prefix = cleanEmail.split('@')[0] || '';
+        displayName = prefix
+          .split(/[._-]/)
+          .filter(Boolean)
+          .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+          .join(' ') || 'Estudante';
+      }
+
       const loggedUser: UserProfile = {
-        id: 'usr-' + Date.now(),
-        nome: name.trim() || (email.split('@')[0] ? email.split('@')[0].charAt(0).toUpperCase() + email.split('@')[0].slice(1) : 'Estudante'),
-        email: email || 'estudante@enem.com.br',
-        meta_nota: Number(targetScore) || 960,
-        data_cadastro: new Date().toLocaleDateString('pt-BR'),
+        id: existingUser?.id || ('usr-' + Date.now()),
+        nome: displayName,
+        email: cleanEmail || 'estudante@enem.com.br',
+        meta_nota: Number(targetScore) || existingUser?.meta_nota || 960,
+        data_cadastro: existingUser?.data_cadastro || new Date().toLocaleDateString('pt-BR'),
       };
 
       saveUser(loggedUser);
       onSuccess(loggedUser);
       onClose();
       router.push('/dashboard');
-    }, 600);
+    }, 400);
   };
 
   const handleGoogleLogin = () => {
+    let googleName = name.trim();
+    if (!googleName && email) {
+      const existing = findRegisteredUserByEmail(email.trim().toLowerCase());
+      if (existing) googleName = existing.nome;
+    }
+    if (!googleName) {
+      googleName = window.prompt('Qual é o seu nome completo para o acesso via Google?')?.trim() || '';
+    }
+    if (!googleName) {
+      googleName = 'Estudante';
+    }
+
+    const cleanGoogleEmail = email.trim() || `${googleName.toLowerCase().replace(/\s+/g, '.')}@gmail.com`;
+
     setLoading(true);
     setTimeout(() => {
       setLoading(false);
       const googleUser: UserProfile = {
         id: 'usr-google-' + Date.now(),
-        nome: 'Gabriel Silva',
-        email: 'gabriel.silva@gmail.com',
+        nome: googleName,
+        email: cleanGoogleEmail,
         meta_nota: 960,
         data_cadastro: new Date().toLocaleDateString('pt-BR'),
       };
@@ -68,7 +99,7 @@ export default function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps
       onSuccess(googleUser);
       onClose();
       router.push('/dashboard');
-    }, 500);
+    }, 400);
   };
 
   return (
@@ -83,8 +114,10 @@ export default function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps
 
         {/* Modal Header */}
         <div className="text-center mb-6">
-          <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-xs">
-            <Sparkles className="w-6 h-6" />
+          <div className="mb-2">
+            <span className="font-black text-3xl tracking-tighter text-slate-950 select-none">
+              NOTA<span className="text-blue-600">1000</span>
+            </span>
           </div>
           <h3 className="text-2xl font-bold text-slate-900">
             {mode === 'login' && 'Entrar na sua conta'}

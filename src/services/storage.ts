@@ -8,28 +8,43 @@ import { evaluateEssayPedagogical } from '@/lib/evaluator';
 const HISTORY_KEY = 'nota1000_history';
 const USER_KEY = 'nota1000_user';
 const API_KEY_STORAGE = 'nota1000_custom_apikey';
+const USERS_REGISTRY_KEY = 'nota1000_registered_accounts';
 
-export const DEFAULT_USER: UserProfile = {
-  id: 'usr-1',
-  nome: 'Gabriel Silva',
-  email: 'gabriel.estudante@enem.com.br',
-  avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
-  meta_nota: 960,
-  data_cadastro: '10/06/2026',
-};
+export function getRegisteredUsers(): Record<string, UserProfile> {
+  if (typeof window === 'undefined') return {};
+  try {
+    const data = localStorage.getItem(USERS_REGISTRY_KEY);
+    return data ? JSON.parse(data) : {};
+  } catch {
+    return {};
+  }
+}
+
+export function findRegisteredUserByEmail(email: string): UserProfile | null {
+  if (!email) return null;
+  const reg = getRegisteredUsers();
+  return reg[email.trim().toLowerCase()] || null;
+}
 
 export function getStoredUser(): UserProfile | null {
   if (typeof window === 'undefined') return null;
   const data = localStorage.getItem(USER_KEY);
-  if (!data) {
-    // Inicializar usuário padrão para excelente experiência inicial
-    localStorage.setItem(USER_KEY, JSON.stringify(DEFAULT_USER));
-    return DEFAULT_USER;
-  }
+  if (!data) return null;
   try {
-    return JSON.parse(data);
+    const user: UserProfile = JSON.parse(data);
+    // Purge legacy hardcoded 'Gabriel' mock so user sees their actual login name
+    if (
+      user.nome === 'Gabriel Silva' ||
+      user.email === 'gabriel.estudante@enem.com.br' ||
+      user.id === 'usr-1' ||
+      user.email === 'gabriel.silva@gmail.com'
+    ) {
+      localStorage.removeItem(USER_KEY);
+      return null;
+    }
+    return user;
   } catch {
-    return DEFAULT_USER;
+    return null;
   }
 }
 
@@ -39,7 +54,17 @@ export function saveUser(user: UserProfile | null): void {
     localStorage.removeItem(USER_KEY);
   } else {
     localStorage.setItem(USER_KEY, JSON.stringify(user));
+    // Salvar no registro de contas locais para lembrar o nome em logins futuros
+    if (user.email) {
+      try {
+        const reg = getRegisteredUsers();
+        reg[user.email.trim().toLowerCase()] = user;
+        localStorage.setItem(USERS_REGISTRY_KEY, JSON.stringify(reg));
+      } catch {}
+    }
   }
+  // Notificar toda a aplicação imediatamente para sincronizar navbar e telas
+  window.dispatchEvent(new Event('nota1000_user_updated'));
 }
 
 export function getCustomApiKey(): string {

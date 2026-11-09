@@ -24,7 +24,11 @@ export const metadata: Metadata = {
   ],
   authors: [{ name: 'Nota 1000 Team' }],
   icons: {
-    icon: '/favicon.ico',
+    icon: [
+      { url: '/icon.svg', type: 'image/svg+xml' },
+      { url: '/favicon.ico' },
+    ],
+    apple: '/icon.svg',
   },
 };
 

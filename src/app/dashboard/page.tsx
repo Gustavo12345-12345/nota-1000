@@ -41,8 +41,17 @@ export default function DashboardPage() {
 
   useEffect(() => {
     setMounted(true);
-    setUser(getStoredUser());
-    setHistory(getEssayHistory());
+    const sync = () => {
+      setUser(getStoredUser());
+      setHistory(getEssayHistory());
+    };
+    sync();
+    window.addEventListener('nota1000_user_updated', sync);
+    window.addEventListener('storage', sync);
+    return () => {
+      window.removeEventListener('nota1000_user_updated', sync);
+      window.removeEventListener('storage', sync);
+    };
   }, []);
 
   if (!mounted) return null;

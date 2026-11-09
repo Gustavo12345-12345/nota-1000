@@ -1,6 +1,6 @@
 import React from 'react';
 import Link from 'next/link';
-import { Sparkles, Heart, ShieldCheck, Award, ArrowUpRight } from 'lucide-react';
+import { Heart, ShieldCheck, Award, ArrowUpRight } from 'lucide-react';
 
 export default function Footer() {
   return (
@@ -9,12 +9,9 @@ export default function Footer() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-10 mb-12">
           {/* Brand Col */}
           <div className="md:col-span-1 space-y-4">
-            <Link href="/" className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-xl bg-blue-600 flex items-center justify-center text-white shadow-md shadow-blue-500/20">
-                <Sparkles className="w-5 h-5 text-blue-100" />
-              </div>
-              <span className="font-extrabold text-xl tracking-tight text-white">
-                Nota <span className="text-blue-400">1000</span>
+            <Link href="/" className="inline-block py-1">
+              <span className="font-black text-2xl tracking-tighter text-white select-none">
+                NOTA<span className="text-blue-500">1000</span>
               </span>
             </Link>
             <p className="text-sm text-slate-400 leading-relaxed">

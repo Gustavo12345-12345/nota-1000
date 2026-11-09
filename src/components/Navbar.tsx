@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
-  Sparkles,
+  Home,
   BookOpen,
   History,
   LayoutDashboard,
@@ -30,8 +30,18 @@ export default function Navbar() {
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
 
   useEffect(() => {
-    setUser(getStoredUser());
+    const syncUser = () => {
+      setUser(getStoredUser());
+    };
+    syncUser();
     setApiKeyInput(getCustomApiKey());
+
+    window.addEventListener('nota1000_user_updated', syncUser);
+    window.addEventListener('storage', syncUser);
+    return () => {
+      window.removeEventListener('nota1000_user_updated', syncUser);
+      window.removeEventListener('storage', syncUser);
+    };
   }, []);
 
   const handleLogout = () => {
@@ -46,7 +56,7 @@ export default function Navbar() {
   };
 
   const navLinks = [
-    { label: 'Início', href: '/', icon: Sparkles },
+    { label: 'Início', href: '/', icon: Home },
     { label: 'Como funciona', href: '/#como-funciona', icon: Info },
     { label: 'Corrigir', href: '/corrigir', icon: PenTool, highlight: true },
     { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
@@ -58,18 +68,10 @@ export default function Navbar() {
       <header className="sticky top-0 z-40 w-full bg-white/95 backdrop-blur border-b border-slate-100 shadow-xs transition-all">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-18 flex items-center justify-between">
           {/* Logo */}
-          <Link href="/" className="flex items-center gap-2.5 group">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white shadow-md shadow-blue-500/20 group-hover:scale-105 transition-transform">
-              <Sparkles className="w-5 h-5 text-blue-100 animate-pulse" />
-            </div>
-            <div className="flex flex-col">
-              <span className="font-extrabold text-xl tracking-tight text-slate-900 group-hover:text-blue-600 transition-colors">
-                Nota <span className="text-blue-600">1000</span>
-              </span>
-              <span className="text-[10px] uppercase font-bold tracking-widest text-slate-600 -mt-1">
-                IA • Redação ENEM
-              </span>
-            </div>
+          <Link href="/" className="flex items-center group py-1">
+            <span className="font-black text-2xl sm:text-3xl tracking-tighter text-slate-950 select-none group-hover:opacity-90 transition-opacity">
+              NOTA<span className="text-blue-600">1000</span>
+            </span>
           </Link>
 
           {/* Desktop Navigation */}

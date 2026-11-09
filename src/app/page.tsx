@@ -1,9 +1,10 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
+import { getStoredUser, UserProfile } from '@/services/storage';
 import {
   Sparkles,
   PenTool,
@@ -26,6 +27,20 @@ import {
 import { ENEM_THEMES } from '@/data/enemThemes';
 
 export default function HomePage() {
+  const [user, setUser] = useState<UserProfile | null>(null);
+
+  useEffect(() => {
+    const syncUser = () => {
+      setUser(getStoredUser());
+    };
+    syncUser();
+    window.addEventListener('nota1000_user_updated', syncUser);
+    window.addEventListener('storage', syncUser);
+    return () => {
+      window.removeEventListener('nota1000_user_updated', syncUser);
+      window.removeEventListener('storage', syncUser);
+    };
+  }, []);
   const steps = [
     {
       number: '01',
@@ -122,10 +137,16 @@ export default function HomePage() {
             {/* Left Col: Headline, Subtitle, CTAs */}
             <div className="lg:col-span-7 space-y-6 text-center lg:text-left">
               {/* Badge */}
-              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200 shadow-xs">
-                <Sparkles className="w-3.5 h-3.5 text-blue-600 animate-pulse" />
-                <span>Inteligência Artificial Especializada na Matriz INEP</span>
-              </div>
+              {user ? (
+                <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200 shadow-xs">
+                  <span>👋 Olá, {user.nome.split(' ')[0]}! Pronto para treinar sua redação hoje?</span>
+                </div>
+              ) : (
+                <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200 shadow-xs">
+                  <Sparkles className="w-3.5 h-3.5 text-blue-600 animate-pulse" />
+                  <span>Inteligência Artificial Especializada na Matriz INEP</span>
+                </div>
+              )}
 
               {/* Title */}
               <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black text-slate-900 tracking-tight leading-[1.12]">
@@ -151,12 +172,21 @@ export default function HomePage() {
                   <ArrowRight className="w-4 h-4 ml-1" />
                 </Link>
 
-                <a
-                  href="#como-funciona"
-                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-7 py-4 rounded-2xl border border-slate-200 text-slate-700 hover:text-slate-900 hover:bg-slate-50 font-bold text-base transition-colors"
-                >
-                  <span>Como funciona</span>
-                </a>
+                {user ? (
+                  <Link
+                    href="/dashboard"
+                    className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-7 py-4 rounded-2xl border border-blue-200 bg-blue-50/60 text-blue-700 hover:bg-blue-100/70 font-bold text-base transition-colors"
+                  >
+                    <span>Acessar meu painel ({user.nome.split(' ')[0]})</span>
+                  </Link>
+                ) : (
+                  <a
+                    href="#como-funciona"
+                    className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-7 py-4 rounded-2xl border border-slate-200 text-slate-700 hover:text-slate-900 hover:bg-slate-50 font-bold text-base transition-colors"
+                  >
+                    <span>Como funciona</span>
+                  </a>
+                )}
               </div>
 
               {/* Social Proof Mini Stats */}
