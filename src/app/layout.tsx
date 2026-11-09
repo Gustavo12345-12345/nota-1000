@@ -30,6 +30,9 @@ export const metadata: Metadata = {
     ],
     apple: '/icon.svg',
   },
+  other: {
+    'google-adsense-account': 'ca-pub-1268066998538689',
+  },
 };
 
 export default function RootLayout({
@@ -39,6 +42,13 @@ export default function RootLayout({
 }) {
   return (
     <html lang="pt-BR" className={`${inter.variable} h-full antialiased`}>
+      <head>
+        <script
+          async
+          src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-1268066998538689"
+          crossOrigin="anonymous"
+        />
+      </head>
       <body className="min-h-full flex flex-col font-sans bg-slate-50 text-slate-900 selection:bg-blue-100 selection:text-blue-900">
         {children}
       </body>
