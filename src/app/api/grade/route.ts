@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
                       process.env.GEMINI_API_KEY ||
                       process.env.GOOGLE_API_KEY;
 
-    // Helper para garantir que a nota final seja estritamente a soma das 5 competências (0 a 200 cada)
+    // Helper para garantir que a nota final seja estritamente a soma das 5 competências (0, 40, 80, 120, 160, 200 cada)
     const buildEnemResult = (
       parsed: any,
       baseResult: CorrectionResult,
@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
       const normalizeScore = (val: any, fallback: number) => {
         const num = Number(val);
         if (isNaN(num)) return fallback;
-        const valid = [0, 40, 80, 120, 160, 180, 200];
+        const valid = [0, 40, 80, 120, 160, 200];
         return valid.reduce((prev, curr) => (Math.abs(curr - num) < Math.abs(prev - num) ? curr : prev));
       };
 
@@ -77,35 +77,55 @@ export async function POST(req: NextRequest) {
       return merged;
     };
 
-    const gradingPrompt = `Você é um avaliador oficial sênior da banca examinadora do ENEM (INEP).
-Sua missão pedagógica é avaliar esta redação com a régua REALISTA, JUSTA e EQUILIBRADA do exame — reconhecendo com clareza o mérito de bons textos e NUNCA sendo hiper-rigoroso ou punitivo por preciosismo desnecessário.
+    const gradingPrompt = `Você é um corretor oficial sênior da banca examinadora do ENEM (INEP).
+Sua avaliação deve ser MODERADA, EQUILIBRADA e ESTRITAMENTE REALISTA, espelhando com fidelidade a régua oficial de correção do exame nacional.
 
-DIRETRIZ DE CALIBRAÇÃO E RIGOR JUSTO (MUITO IMPORTANTE):
-- No ENEM real, corretores experientes valorizam a competência comunicativa e a autoria do estudante. Redações bem articuladas, com vocabulário formal, repertório legitimado e proposta de intervenção completa pertencem legitimamente à faixa de excelência (920 a 1000 pontos).
-- NUNCA rebaixe artificialmente para 800 uma redação que é claramente nível 920 a 960!
-- Seja pedagógico e equilibrado: aponte os desvios com clareza e respeito nos comentários, mas atribua a nota justa e merecida na matriz oficial.
+POSTURA DO CORRETOR (MODERADO E REALISTA):
+- NÃO SEJA PERMISSIVO OU LENIENTE: Não dê nota máxima (200) por mera simpatia, formalidade básica ou citações soltas. Para atingir 200 pontos em qualquer competência, o texto deve satisfazer plenamente os requisitos do Nível 5 do Manual de Redação do ENEM.
+- NÃO SEJA HIPER-RIGOROSO: Reconheça com justiça o mérito do candidato. Redações de excelência (920 a 960 pontos) possuem repertório produtivo e proposta sólida com pequenos deslizes normativos ou coesivos pontuais que não anulam a qualidade do texto. Não rebaixe um texto de 920-960 para 800 por preciosismo.
+- PONTUAÇÃO REALISTA TÍPICA:
+  * Redação excelente/exemplar com pequenas falhas isoladas: 920 a 960 pontos (ex: quatro notas 200 e uma 160).
+  * Redação boa com desvios normais de alunos competitivos: 800 a 880 pontos.
+  * Redação mediana com lacunas argumentativas ou desvios: 600 a 720 pontos.
 
-MATRIZ OFICIAL DAS 5 COMPETÊNCIAS (Notas permitidas: 0, 40, 80, 120, 160, 180, 200):
-1. Competência 1 (Norma Culta da Língua Escrita):
-   - 200 pts (Nível 5): Excelente domínio. Pequenos desvios gramaticais ou convenções de escrita são aceitos como excepcionais (até 2 desvios leves isolados de vírgula ou grafia) se a estrutura sintática for fluente e madura. Se o texto for formal e bem escrito, atribua 200.
-   - 160 pts (Nível 4): Bom domínio com alguns desvios visíveis, mas sem comprometer a fluência.
+MATRIZ OFICIAL DAS 5 COMPETÊNCIAS DO ENEM (Notas por competência: 0, 40, 80, 120, 160 ou 200):
+
+1. Competência 1 (Domínio da Norma Culta da Língua Escrita):
+   - 200 pts (Nível 5): Excelente domínio da modalidade escrita formal. Admite no máximo 1 desvio gramatical/convenção isolado (ex: uma vírgula ou deslize ortográfico pontual) e nenhuma falha de estrutura sintática, ou 1 falha sintática leve sem outros desvios. Exige períodos maduros e vocabulário culto.
+   - 160 pts (Nível 4): Bom domínio. Apresenta poucos desvios gramaticais (2 a 4 desvios de pontuação, crase, concordância ou regência) ou pequenas falhas sintáticas, sem comprometer a fluência.
+   - 120 pts (Nível 3): Domínio mediano. Apresenta desvios gramaticais regulares (mais de 4 desvios) ou problemas de estruturação sintática perceptíveis (truncamento ou justa-posição).
+   - 80 pts (Nível 2) ou menos: Desvios gramaticais frequentes e vocabulário simplório.
+
 2. Competência 2 (Compreensão da Proposta e Repertório Sociocultural):
-   - 200 pts (Nível 5): Aborda o tema completamente e utiliza repertório sociocultural legitimado (filosofia, sociologia, história, literatura, legislação ou dados) que seja PERTINENTE e PRODUTIVO. Se citou autores ou conceitos aplicados ao tema (ex: Simone de Beauvoir, Constituição, Dimenstein, Bauman, Hobbes, etc.), a nota DEVE ser 200.
-   - 160 pts (Nível 4): Repertório pertinente porém pouco articulado.
+   - 200 pts (Nível 5): Desenvolve o tema integralmente (sem tangenciamento) no tipo dissertativo-argumentativo E mobiliza repertório sociocultural que seja simultaneamente LEGITIMADO (filosofia, sociologia, história, literatura, leis ou estatísticas), PERTINENTE ao tema E COMPROVADAMENTE PRODUTIVO para a defesa da tese. Apenas citar autores ou dados sem vinculação crítica direta ao raciocínio NÃO confere 200 (atribua 160).
+   - 160 pts (Nível 4): Aborda o tema e apresenta repertório legitimado e pertinente, mas com uso pouco produtivo (repertório decorado, solto ou pouco articulado à argumentação).
+   - 120 pts (Nível 3): Aborda o tema recorrendo apenas aos textos motivadores ou sem repertório legitimado de outras áreas do conhecimento.
+   - 80 pts (Nível 2): Tangenciamento do tema ou repertório descontextualizado.
+
 3. Competência 3 (Projeto de Texto e Argumentação):
-   - 200 pts (Nível 5): Projeto de texto estratégico com introdução clara (apresentando tese), dois parágrafos de desenvolvimento articulados com argumentos consistentes e conclusão coerente.
-   - 160 pts (Nível 4): Projeto de texto com pequenas falhas argumentativas.
-4. Competência 4 (Coesão Textual e Recursos Linguísticos):
-   - 200 pts (Nível 5): Presença expressiva de conectivos interparágrafos (no início de D1, D2 e Conclusão, ex: "Em primeiro lugar", "Ademais", "Além disso", "Portanto", "Outrossim") e conectivos intraparágrafos sem repetição monótona.
-   - 160 pts (Nível 4): Coesão adequada, mas com alguma repetição.
+   - 200 pts (Nível 5): Projeto de texto estratégico de excelência. Apresenta introdução com tese clara e dois direcionamentos argumentativos, desenvolvidos em D1 e D2 com autoria, argumentos consistentes, progressão temática, causas e consequências, sem lacunas argumentativas ou ideias soltas.
+   - 160 pts (Nível 4): Projeto de texto perceptível e organizado, mas com pequenas lacunas argumentativas, ligeira superficialidade em algum ponto ou desenvolvimento incompleto de um dos argumentos.
+   - 120 pts (Nível 3): Projeto de texto com falhas visíveis, argumentos previsíveis, senso comum ou contradições.
+
+4. Competência 4 (Coesão Textual e Mecanismos Linguísticos):
+   - 200 pts (Nível 5): Recursos coesivos diversificados. Exige obrigatoriamente conectivos interparágrafos (no início de pelo menos 2 parágrafos: ex: no início de D1 ou D2 e no início da Conclusão) E conectivos intraparágrafos variados em praticamente todos os períodos, sem repetições viciosas (não repete o mesmo conectivo) e sem inadequações de sentido.
+   - 160 pts (Nível 4): Uso adequado de conectivos, mas com pouca variedade ou com repetições notórias de termos coesivos (ex: repetição de "além disso", "ademais" ou "portanto") ou ausência de conectivo interparágrafos em algum parágrafo.
+   - 120 pts (Nível 3): Coesão mediana, repetições frequentes ou carência de conectivos interparágrafos.
+
 5. Competência 5 (Proposta de Intervenção Social):
-   - Avaliação objetiva dos 5 elementos (40 pontos cada):
-     * Agente: quem executará a medida (40 pts)
-     * Ação: o que deve ser feito (40 pts)
-     * Meio/Modo: como será executado (40 pts)
-     * Efeito/Finalidade: para quê / com qual objetivo (40 pts)
-     * Detalhamento: explicação, exemplo ou justificativa de um dos termos (40 pts)
-   - SE OS 5 ELEMENTOS ESTIVEREM PRESENTES na proposta (geralmente no parágrafo final), A NOTA DE C5 DEVE SER OBRIGATORIAMENTE 200!
+   - Avaliação rigorosamente técnica dos 5 elementos da proposta de intervenção (40 pontos por elemento):
+     1. Agente (quem executará a medida, ex: Ministério, Governo Federal, Sociedade Civil) - 40 pts
+     2. Ação (o que deve ser feito, verbo propositivo prático) - 40 pts
+     3. Meio/Modo (como a ação será realizada, instrumento de execução, ex: "por meio de...", "mediante...") - 40 pts
+     4. Efeito/Finalidade (para qual objetivo/efeito prático a ação serve, ex: "a fim de...", "com o fito de...") - 40 pts
+     5. Detalhamento (especificação prática, explicação suplementar ou exemplo de um dos 4 anteriores) - 40 pts
+   - PONTUAÇÃO DE C5:
+     * 5 elementos completos e claros = 200 pontos.
+     * 4 elementos (falta detalhamento, meio ou outro) = 160 pontos.
+     * 3 elementos presentes = 120 pontos.
+     * 2 elementos presentes = 80 pontos.
+     * 1 elemento presente = 40 pontos.
+     * Ausência de proposta ou violação grave dos direitos humanos = 0 pontos.
 
 REGRA MATEMÁTICA OBRIGATÓRIA:
 - "nota_total" DEVE SER ESTRITAMENTE A SOMA EXATA:
