@@ -53,7 +53,7 @@ export default function ScoreHero({ result, onReset, onCopyFeedback, copied }: S
       {/* Top Banner with Theme */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-slate-100">
         <div className="space-y-1">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold border ${badge.color}">
+          <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold border ${badge.color}`}>
             <Award className="w-3.5 h-3.5" />
             {badge.label}
           </div>
@@ -110,6 +110,21 @@ export default function ScoreHero({ result, onReset, onCopyFeedback, copied }: S
             <span className="text-2xl sm:text-3xl font-bold text-slate-600">
               / 1000
             </span>
+          </div>
+
+          {/* Breakdown sum pill */}
+          <div className="inline-flex flex-wrap items-center gap-1.5 px-3 py-1.5 mb-3 bg-blue-50 border border-blue-200/80 rounded-xl text-xs font-semibold text-blue-900">
+            <span className="text-blue-600 font-bold">Soma oficial:</span>
+            <span>C1 ({result.competencias.c1.nota})</span>
+            <span>+</span>
+            <span>C2 ({result.competencias.c2.nota})</span>
+            <span>+</span>
+            <span>C3 ({result.competencias.c3.nota})</span>
+            <span>+</span>
+            <span>C4 ({result.competencias.c4.nota})</span>
+            <span>+</span>
+            <span>C5 ({result.competencias.c5.nota})</span>
+            <span className="font-extrabold text-blue-700">= {nota_total} pts</span>
           </div>
 
           <p className="text-base sm:text-lg font-semibold text-blue-700 mb-4">
