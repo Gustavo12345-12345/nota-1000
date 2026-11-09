@@ -13,9 +13,10 @@ import {
   Eye,
   RefreshCw,
   AlertCircle,
-  Cpu
+  Cpu,
+  Key
 } from 'lucide-react';
-import { getCustomApiKey } from '@/services/storage';
+import { getCustomApiKey, saveCustomApiKey } from '@/services/storage';
 
 interface OCRModalProps {
   isOpen: boolean;
@@ -30,6 +31,9 @@ export default function OCRModal({ isOpen, onClose, onConfirmText }: OCRModalPro
   const [confidence, setConfidence] = useState<number | null>(null);
   const [modelUsed, setModelUsed] = useState<string>('Gemini 1.5 Pro Vision');
   const [ocrStep, setOcrStep] = useState<'upload' | 'scanning' | 'review'>('upload');
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [showKeyInput, setShowKeyInput] = useState(false);
+  const [inlineKey, setInlineKey] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   if (!isOpen) return null;
@@ -42,6 +46,7 @@ export default function OCRModal({ isOpen, onClose, onConfirmText }: OCRModalPro
   };
 
   const processFile = (file: File) => {
+    setErrorMessage(null);
     const reader = new FileReader();
     reader.onload = () => {
       const base64 = reader.result as string;
@@ -52,18 +57,19 @@ export default function OCRModal({ isOpen, onClose, onConfirmText }: OCRModalPro
   };
 
   const handleUseSampleImage = () => {
-    // Usar imagem de exemplo que copiamos de Nota1000site/essayimage.png
+    setErrorMessage(null);
     const samplePath = '/sample-essay.png';
     setImagePreview(samplePath);
     triggerOCR(samplePath, true);
   };
 
-  const triggerOCR = async (imageSrc: string, isSample: boolean) => {
+  const triggerOCR = async (imageSrc: string, isSample: boolean, overrideKey?: string) => {
     setIsProcessing(true);
     setOcrStep('scanning');
+    setErrorMessage(null);
 
     try {
-      const customKey = getCustomApiKey();
+      const customKey = overrideKey || getCustomApiKey();
       const response = await fetch('/api/ocr', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -76,22 +82,37 @@ export default function OCRModal({ isOpen, onClose, onConfirmText }: OCRModalPro
 
       const data = await response.json();
 
-      // Pequeno delay para a animação do scanner parecer realista e fluida
+      if (!response.ok || data.error) {
+        setIsProcessing(false);
+        setOcrStep('upload');
+        setErrorMessage(data.error || 'Falha ao comunicar com o serviço de OCR.');
+        if (data.needKey) {
+          setShowKeyInput(true);
+        }
+        return;
+      }
+
       setTimeout(() => {
         setIsProcessing(false);
         setRecognizedText(data.text || '');
         setConfidence(data.confidence || 0.98);
         setModelUsed(data.model_used || 'Gemini 1.5 Pro Vision');
         setOcrStep('review');
-      }, 1400);
-    } catch (err) {
+      }, 1000);
+    } catch (err: any) {
       console.error('Falha no OCR:', err);
       setIsProcessing(false);
-      setOcrStep('review');
-      setRecognizedText(
-        'A invisibilidade do trabalho de cuidado realizado pela mulher no Brasil é um assunto muito sério que precisa ser resolvido logo. Historicamente as mulheres sempre cuidaram da casa e dos filhos...'
-      );
-      setConfidence(0.88);
+      setOcrStep('upload');
+      setErrorMessage(`Erro de conexão: ${err.message || 'Verifique sua internet ou a chave de API.'}`);
+    }
+  };
+
+  const handleSaveInlineKey = () => {
+    if (!inlineKey.trim()) return;
+    saveCustomApiKey(inlineKey.trim());
+    setShowKeyInput(false);
+    if (imagePreview) {
+      triggerOCR(imagePreview, false, inlineKey.trim());
     }
   };
 
@@ -106,6 +127,7 @@ export default function OCRModal({ isOpen, onClose, onConfirmText }: OCRModalPro
     setImagePreview(null);
     setRecognizedText('');
     setConfidence(null);
+    setErrorMessage(null);
     setOcrStep('upload');
   };
 
@@ -123,7 +145,7 @@ export default function OCRModal({ isOpen, onClose, onConfirmText }: OCRModalPro
                 Reconhecimento Óptico de Redação Manuscrita (OCR)
               </h3>
               <p className="text-xs text-slate-600">
-                Tire uma foto ou faça upload da sua folha de redação para transcrição inteligente.
+                Tire uma foto ou faça upload da sua folha de redação para transcrição inteligente via IA.
               </p>
             </div>
           </div>
@@ -137,9 +159,44 @@ export default function OCRModal({ isOpen, onClose, onConfirmText }: OCRModalPro
 
         {/* Modal Body */}
         <div className="flex-1 overflow-y-auto py-6">
+          {/* Error Banner */}
+          {errorMessage && (
+            <div className="mb-6 p-4 bg-rose-50 border border-rose-200 rounded-2xl text-xs sm:text-sm text-rose-900 space-y-3 animate-in fade-in">
+              <div className="flex items-start gap-2.5">
+                <AlertCircle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <strong className="block font-bold mb-1">Aviso de Leitura da Imagem</strong>
+                  <p className="leading-relaxed">{errorMessage}</p>
+                </div>
+              </div>
+
+              {/* Inline API Key input if requested */}
+              {showKeyInput && (
+                <div className="pt-3 border-t border-rose-200/60 flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                  <div className="relative flex-1">
+                    <Key className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
+                    <input
+                      type="password"
+                      placeholder="Cole aqui sua chave do Google AI Studio (AIzaSy...)"
+                      value={inlineKey}
+                      onChange={(e) => setInlineKey(e.target.value)}
+                      className="w-full pl-9 pr-3 py-2 bg-white rounded-xl border border-rose-300 text-xs text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-blue-500 font-mono"
+                    />
+                  </div>
+                  <button
+                    onClick={handleSaveInlineKey}
+                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shrink-0 shadow-xs"
+                  >
+                    Salvar e Tentar Novamente
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* STEP 1: Upload or Sample Selection */}
           {ocrStep === 'upload' && (
-            <div className="max-w-xl mx-auto space-y-6 text-center py-6">
+            <div className="max-w-xl mx-auto space-y-6 text-center py-4">
               <div
                 onClick={() => fileInputRef.current?.click()}
                 className="border-2 border-dashed border-blue-200 hover:border-blue-400 bg-blue-50/30 hover:bg-blue-50/60 rounded-3xl p-8 sm:p-12 cursor-pointer transition-all flex flex-col items-center justify-center group"
@@ -161,7 +218,7 @@ export default function OCRModal({ isOpen, onClose, onConfirmText }: OCRModalPro
                   Suporta arquivos JPG, PNG ou WEBP em boa resolução e iluminação adequada.
                 </p>
                 <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white rounded-xl text-xs font-semibold shadow-xs">
-                  <Camera className="w-3.5 h-3.5" /> Selecionar imagem do computador
+                  <Camera className="w-3.5 h-3.5" /> Selecionar imagem do dispositivo
                 </span>
               </div>
 
@@ -193,7 +250,7 @@ export default function OCRModal({ isOpen, onClose, onConfirmText }: OCRModalPro
               </div>
               <div>
                 <h4 className="text-lg font-bold text-slate-900 mb-1">
-                  Decodificando manuscrito via IA...
+                  Decodificando manuscrito via Gemini Vision...
                 </h4>
                 <p className="text-xs text-slate-600 max-w-md mx-auto">
                   Analisando traços, quebras de linhas e vocábulos da folha de redação. Aguarde alguns instantes.
@@ -280,7 +337,7 @@ export default function OCRModal({ isOpen, onClose, onConfirmText }: OCRModalPro
             onClick={onClose}
             className="px-4 py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-100 transition-colors"
           >
-            Cancelar
+            Fechar
           </button>
 
           {ocrStep === 'review' && (
