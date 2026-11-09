@@ -45,10 +45,12 @@ Portanto medidas precisam ser tomadas pelo governo. O Ministério da Educação 
       }, { status: 401 });
     }
 
-    // Formato da imagem (JPEG, PNG, WEBP)
-    const mimeMatch = imageBase64.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,/);
-    const mimeType = mimeMatch ? mimeMatch[1] : 'image/jpeg';
-    const cleanBase64 = imageBase64.replace(/^data:image\/[a-zA-Z0-9.+-]+;base64,/, '');
+    // Formato da imagem (Garante sempre compatibilidade com OpenAI Vision: JPEG, PNG, WEBP, GIF)
+    const mimeMatch = imageBase64.match(/^data:([^;]+);base64,/);
+    const rawMime = mimeMatch ? mimeMatch[1].toLowerCase() : 'image/jpeg';
+    const supportedMimes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+    const mimeType = supportedMimes.includes(rawMime) ? rawMime : 'image/jpeg';
+    const cleanBase64 = imageBase64.replace(/^data:[^;]+;base64,/, '');
 
     const ocrInstruction = `Você é um especialista em transcrição paleográfica de redações manuscritas do ENEM em língua portuguesa do Brasil.
 Transcreva com fidelidade absoluta todo o texto escrito pelo candidato nesta folha de redação.

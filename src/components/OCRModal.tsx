@@ -17,6 +17,7 @@ import {
   Key
 } from 'lucide-react';
 import { getCustomApiKey, saveCustomApiKey } from '@/services/storage';
+import { normalizeImageForOCR } from '@/lib/imageProcessor';
 
 interface OCRModalProps {
   isOpen: boolean;
@@ -29,7 +30,7 @@ export default function OCRModal({ isOpen, onClose, onConfirmText }: OCRModalPro
   const [isProcessing, setIsProcessing] = useState(false);
   const [recognizedText, setRecognizedText] = useState('');
   const [confidence, setConfidence] = useState<number | null>(null);
-  const [modelUsed, setModelUsed] = useState<string>('Gemini 1.5 Pro Vision');
+  const [modelUsed, setModelUsed] = useState<string>('ChatGPT GPT-4o Vision');
   const [ocrStep, setOcrStep] = useState<'upload' | 'scanning' | 'review'>('upload');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [showKeyInput, setShowKeyInput] = useState(false);
@@ -45,15 +46,25 @@ export default function OCRModal({ isOpen, onClose, onConfirmText }: OCRModalPro
     }
   };
 
-  const processFile = (file: File) => {
+  const processFile = async (file: File) => {
     setErrorMessage(null);
-    const reader = new FileReader();
-    reader.onload = () => {
-      const base64 = reader.result as string;
+    setIsProcessing(true);
+    setOcrStep('scanning');
+
+    try {
+      // Normaliza qualquer formato (JPG, PNG, HEIC de iPhone, WEBP, BMP, PDF)
+      const base64 = await normalizeImageForOCR(file);
       setImagePreview(base64);
       triggerOCR(base64, false);
-    };
-    reader.readAsDataURL(file);
+    } catch (err: any) {
+      console.error('Falha ao processar arquivo para OCR:', err);
+      setIsProcessing(false);
+      setOcrStep('upload');
+      setErrorMessage(
+        err?.message ||
+        'Não foi possível processar o arquivo. Verifique se a foto ou documento é legível.'
+      );
+    }
   };
 
   const handleUseSampleImage = () => {
@@ -199,13 +210,19 @@ export default function OCRModal({ isOpen, onClose, onConfirmText }: OCRModalPro
             <div className="max-w-xl mx-auto space-y-6 text-center py-4">
               <div
                 onClick={() => fileInputRef.current?.click()}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  const droppedFile = e.dataTransfer.files?.[0];
+                  if (droppedFile) processFile(droppedFile);
+                }}
                 className="border-2 border-dashed border-blue-200 hover:border-blue-400 bg-blue-50/30 hover:bg-blue-50/60 rounded-3xl p-8 sm:p-12 cursor-pointer transition-all flex flex-col items-center justify-center group"
               >
                 <input
                   type="file"
                   ref={fileInputRef}
                   onChange={handleFileChange}
-                  accept="image/png, image/jpeg, image/jpg, image/webp"
+                  accept="image/*, .heic, .heif, .pdf, application/pdf"
                   className="hidden"
                 />
                 <div className="w-16 h-16 rounded-2xl bg-white shadow-md text-blue-600 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
@@ -215,10 +232,10 @@ export default function OCRModal({ isOpen, onClose, onConfirmText }: OCRModalPro
                   Clique ou arraste a foto da sua redação
                 </h4>
                 <p className="text-xs text-slate-600 max-w-sm mb-4">
-                  Suporta arquivos JPG, PNG ou WEBP em boa resolução e iluminação adequada.
+                  Suporta todos os formatos: fotos do iPhone (HEIC), JPG, PNG, WEBP ou documentos escaneados em PDF.
                 </p>
-                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white rounded-xl text-xs font-semibold shadow-xs">
-                  <Camera className="w-3.5 h-3.5" /> Selecionar imagem do dispositivo
+                <span className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold shadow-xs transition-colors">
+                  <Camera className="w-3.5 h-3.5" /> Tirar foto ou escolher arquivo
                 </span>
               </div>
 

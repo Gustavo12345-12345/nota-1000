@@ -27,7 +27,8 @@ import {
 import { CorrectionResult } from '@/types/essay';
 import { ENEM_THEMES, SAMPLE_ESSAY_HIGH_SCORE, SAMPLE_ESSAY_INTERMEDIATE } from '@/data/enemThemes';
 import { calculateEssayStats } from '@/lib/evaluator';
-import { saveEssayCorrection, getCustomApiKey } from '@/services/storage';
+import { saveEssayCorrection, getCustomApiKey, getStoredUser, UserProfile } from '@/services/storage';
+import AuthModal from '@/components/AuthModal';
 
 export default function CorrigirPage() {
   const [selectedThemeId, setSelectedThemeId] = useState<string>(ENEM_THEMES[1].id);
@@ -39,6 +40,51 @@ export default function CorrigirPage() {
   const [correctionResult, setCorrectionResult] = useState<CorrectionResult | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [copied, setCopied] = useState<boolean>(false);
+
+  // Controle de Usuário e Autenticação Obrigatória
+  const [user, setUser] = useState<UserProfile | null>(null);
+  const [authModalOpen, setAuthModalOpen] = useState<boolean>(false);
+  const [pendingAction, setPendingAction] = useState<'ocr' | 'grade' | null>(null);
+
+  useEffect(() => {
+    const syncUser = () => {
+      setUser(getStoredUser());
+    };
+    syncUser();
+    window.addEventListener('nota1000_user_updated', syncUser);
+    window.addEventListener('storage', syncUser);
+    return () => {
+      window.removeEventListener('nota1000_user_updated', syncUser);
+      window.removeEventListener('storage', syncUser);
+    };
+  }, []);
+
+  // Exige login antes de permitir upload da redação ou correção
+  const handleRequireAuth = (action: 'ocr' | 'grade') => {
+    const currentUser = getStoredUser();
+    if (!currentUser) {
+      setPendingAction(action);
+      setAuthModalOpen(true);
+      return;
+    }
+
+    if (action === 'ocr') {
+      setOcrModalOpen(true);
+    } else {
+      handleStartGrading();
+    }
+  };
+
+  const handleAuthSuccess = (newUser: UserProfile) => {
+    setUser(newUser);
+    const action = pendingAction;
+    setPendingAction(null);
+    if (action === 'ocr') {
+      setOcrModalOpen(true);
+    } else if (action === 'grade') {
+      handleStartGrading();
+    }
+  };
 
   // Live real-time statistics
   const stats = calculateEssayStats(essayText);
@@ -159,6 +205,17 @@ ${correctionResult.feedback_geral}
           }}
         />
 
+        {/* Modal de Autenticação obrigatório para upload e correção */}
+        <AuthModal
+          isOpen={authModalOpen}
+          onClose={() => {
+            setAuthModalOpen(false);
+            setPendingAction(null);
+          }}
+          onSuccess={handleAuthSuccess}
+          titleNotice="Faça login ou crie sua conta gratuita para enviar e escanear sua redação"
+        />
+
         {/* VIEW 1: RESULT PAGE (When graded) */}
         {correctionResult ? (
           <div className="space-y-8 animate-in fade-in duration-300">
@@ -275,6 +332,31 @@ ${correctionResult.feedback_geral}
               </div>
             )}
 
+            {/* Aviso de login necessário para upload e correção */}
+            {!user && (
+              <div className="bg-gradient-to-r from-blue-50 to-indigo-50/70 border border-blue-200/80 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs sm:text-sm shadow-xs">
+                <div className="flex items-center gap-2.5 text-slate-800">
+                  <div className="w-8 h-8 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0">
+                    <Sparkles className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <strong className="block font-bold text-slate-900">Faça login para escanear sua folha de redação</strong>
+                    <span className="text-slate-600 text-xs">Crie sua conta gratuita para enviar fotos manuscritas e acompanhar sua evolução no painel.</span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPendingAction(null);
+                    setAuthModalOpen(true);
+                  }}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-xs transition-all shrink-0 active:scale-98"
+                >
+                  Entrar ou Cadastrar
+                </button>
+              </div>
+            )}
+
             {/* Split Workspace */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
               {/* Left Column: Theme Selector, Title, and Main Text Editor */}
@@ -336,7 +418,7 @@ ${correctionResult.feedback_geral}
                     {/* OCR Button in top bar */}
                     <button
                       type="button"
-                      onClick={() => setOcrModalOpen(true)}
+                      onClick={() => handleRequireAuth('ocr')}
                       className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-xl text-xs font-bold transition-all border border-blue-200 shadow-xs"
                     >
                       <Camera className="w-3.5 h-3.5 text-blue-600" />
@@ -399,7 +481,7 @@ ${correctionResult.feedback_geral}
                 <div className="pt-4 flex flex-col sm:flex-row items-center justify-between gap-4 border-t border-slate-100">
                   <button
                     type="button"
-                    onClick={() => setOcrModalOpen(true)}
+                    onClick={() => handleRequireAuth('ocr')}
                     className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl border border-slate-200 text-slate-700 text-xs sm:text-sm font-bold hover:bg-slate-50 transition-colors"
                   >
                     <Upload className="w-4 h-4 text-slate-500" />
@@ -408,7 +490,7 @@ ${correctionResult.feedback_geral}
 
                   <button
                     type="button"
-                    onClick={handleStartGrading}
+                    onClick={() => handleRequireAuth('grade')}
                     disabled={isProcessing || stats.palavras < 15}
                     className="w-full sm:w-auto inline-flex items-center justify-center gap-2.5 bg-blue-600 hover:bg-blue-700 text-white px-8 py-3.5 rounded-2xl text-sm sm:text-base font-bold shadow-lg shadow-blue-600/30 active:scale-98 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                   >
@@ -496,7 +578,7 @@ ${correctionResult.feedback_geral}
                   </p>
                   <button
                     type="button"
-                    onClick={() => setOcrModalOpen(true)}
+                    onClick={() => handleRequireAuth('ocr')}
                     className="w-full mt-2 py-2.5 px-4 bg-white text-blue-700 hover:bg-blue-50 font-bold text-xs rounded-xl transition-colors shadow-xs"
                   >
                     Fotografar redação agora

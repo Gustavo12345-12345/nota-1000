@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { X, Mail, Lock, User, ArrowRight, CheckCircle2 } from 'lucide-react';
 import { saveUser, UserProfile, findRegisteredUserByEmail } from '@/services/storage';
 
@@ -9,10 +9,12 @@ interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: (user: UserProfile) => void;
+  titleNotice?: string;
 }
 
-export default function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps) {
+export default function AuthModal({ isOpen, onClose, onSuccess, titleNotice }: AuthModalProps) {
   const router = useRouter();
+  const pathname = usePathname();
   const [mode, setMode] = useState<'login' | 'register' | 'forgot'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -66,7 +68,9 @@ export default function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps
       saveUser(loggedUser);
       onSuccess(loggedUser);
       onClose();
-      router.push('/dashboard');
+      if (pathname !== '/corrigir') {
+        router.push('/dashboard');
+      }
     }, 400);
   };
 
@@ -98,7 +102,9 @@ export default function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps
       saveUser(googleUser);
       onSuccess(googleUser);
       onClose();
-      router.push('/dashboard');
+      if (pathname !== '/corrigir') {
+        router.push('/dashboard');
+      }
     }, 400);
   };
 
@@ -119,6 +125,13 @@ export default function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps
               NOTA<span className="text-blue-600">1000</span>
             </span>
           </div>
+
+          {titleNotice && (
+            <div className="my-2.5 p-2.5 bg-blue-50 border border-blue-200 rounded-xl text-xs font-bold text-blue-800 animate-in fade-in">
+              🔒 {titleNotice}
+            </div>
+          )}
+
           <h3 className="text-2xl font-bold text-slate-900">
             {mode === 'login' && 'Entrar na sua conta'}
             {mode === 'register' && 'Crie sua conta no Nota 1000'}
