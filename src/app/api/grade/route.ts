@@ -17,7 +17,10 @@ export async function POST(req: NextRequest) {
 
     const providedKey = (userProvidedKey && String(userProvidedKey).trim()) || '';
     const openAiKey = (providedKey.startsWith('sk-') ? providedKey : null) ||
-                      process.env.OPENAI_API_KEY;
+                      process.env.OPENAI_API_KEY ||
+                      process.env.NOTA1000 ||
+                      process.env['NOTA-1000'] ||
+                      process.env.OPENAI_KEY;
 
     const geminiKey = (!providedKey.startsWith('sk-') && providedKey ? providedKey : null) ||
                       process.env.GEMINI_API_KEY ||

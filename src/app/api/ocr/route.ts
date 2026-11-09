@@ -29,7 +29,10 @@ Portanto medidas precisam ser tomadas pelo governo. O Ministério da Educação 
     // Detectar provedor pela chave (OpenAI começa com "sk-")
     const providedKey = (userProvidedKey && String(userProvidedKey).trim()) || '';
     const openAiKey = (providedKey.startsWith('sk-') ? providedKey : null) ||
-                      process.env.OPENAI_API_KEY;
+                      process.env.OPENAI_API_KEY ||
+                      process.env.NOTA1000 ||
+                      process.env['NOTA-1000'] ||
+                      process.env.OPENAI_KEY;
 
     const geminiKey = (!providedKey.startsWith('sk-') && providedKey ? providedKey : null) ||
                       process.env.GEMINI_API_KEY ||
